@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor 3D por Daniel Gatti</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        },
+                        balsa: '#e3c18d',
+                        plywood: '#c49a6c'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Three.js Core & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.90);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="h-full overflow-hidden flex flex-col font-sans select-none bg-slate-950 text-slate-200">
+
+    <!-- Top Header Navigation -->
+    <header class="h-14 bg-slate-900/95 border-b border-slate-800 px-4 flex items-center justify-between z-20 shrink-0 shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="bg-gradient-to-tr from-brand-600 to-amber-500 p-2 rounded-lg shadow-md text-white">
+                <i class="fa-solid fa-cube text-xl"></i>
+            </div>
+            <div>
+                <!-- User Prominent Attribution Header -->
+                <h1 class="font-bold text-base sm:text-lg leading-tight tracking-wide text-white flex items-center gap-2">
+                    Visor 3D
+                    <span class="text-xs font-bold px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm">
+                        por Daniel Gatti
+                    </span>
+                </h1>
+                <p class="text-[11px] text-slate-400 hidden sm:block">Inspección CAD, análisis de geometría y cálculo de masa</p>
+            </div>
+        </div>
+
+        <!-- Header Controls & Action Buttons -->
+        <div class="flex items-center space-x-2">
+            <!-- Undo & Redo History Buttons -->
+            <div class="flex items-center bg-slate-800 rounded-md border border-slate-700 p-0.5 mr-1">
+                <button id="btnUndo" title="Deshacer Cambio (Ctrl+Z)" class="px-2.5 py-1 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition text-xs flex items-center gap-1" disabled>
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span class="hidden md:inline">Deshacer</span>
+                </button>
+                <div class="w-px h-4 bg-slate-700"></div>
+                <button id="btnRedo" title="Rehacer Cambio (Ctrl+Y)" class="px-2.5 py-1 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition text-xs flex items-center gap-1" disabled>
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span class="hidden md:inline">Rehacer</span>
+                </button>
+            </div>
+
+            <!-- Sample Model Selector -->
+            <select id="sampleSelect" class="bg-slate-800 border border-slate-700 hover:border-slate-600 text-xs text-slate-200 py-1.5 px-2.5 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer">
+                <option value="" disabled selected>📂 Ejemplos CAD Aeromodelismo...</option>
+                <option value="rib">✈️ Cuaderna / Costilla Aligerada (Balsa)</option>
+                <option value="wing">🛩️ Tramo de Ala con Estructura</option>
+                <option value="propeller">🚁 Hélice Bipala Aeromodelismo</option>
+                <option value="bulkhead">⚙️ Cuaderna Cortafuegos (Plywood)</option>
+            </select>
+
+            <!-- File Upload Input Button -->
+            <label class="bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium px-3 py-1.5 rounded-md cursor-pointer flex items-center space-x-1.5 transition shadow">
+                <i class="fa-solid fa-file-import"></i>
+                <span class="hidden sm:inline">Abrir STL / OBJ</span>
+                <input type="file" id="fileInput" accept=".stl,.obj" class="hidden">
+            </label>
+
+            <!-- Reset View Button -->
+            <button id="btnResetCamera" title="Restablecer Vista" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition">
+                <i class="fa-solid fa-arrows-to-dot"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- Floating View Projection Toolbar -->
+        <div class="absolute top-4 left-4 z-10 flex flex-col space-y-1 glass-panel p-1.5 rounded-lg shadow-2xl">
+            <button id="viewIso" title="Vista Isométrica 3D" class="p-2 text-xs hover:bg-slate-700/60 rounded text-slate-300 hover:text-white transition flex items-center justify-center">
+                <i class="fa-solid fa-cube"></i>
+            </button>
+            <button id="viewTop" title="Vista Superior (Planta)" class="p-2 text-xs hover:bg-slate-700/60 rounded text-slate-300 hover:text-white transition font-bold">TOP</button>
+            <button id="viewFront" title="Vista Frontal" class="p-2 text-xs hover:bg-slate-700/60 rounded text-slate-300 hover:text-white transition font-bold">FRONT</button>
+            <button id="viewRight" title="Vista Lateral Derecha" class="p-2 text-xs hover:bg-slate-700/60 rounded text-slate-300 hover:text-white transition font-bold">RIGHT</button>
+            <div class="h-px bg-slate-700/60 my-1"></div>
+            <!-- Quick Measure Toggle Button -->
+            <button id="btnToolMeasure" title="Herramienta de Medición (Medir entre 2 puntos)" class="p-2 text-xs hover:bg-slate-700/60 rounded text-slate-300 hover:text-white transition flex items-center justify-center">
+                <i class="fa-solid fa-ruler-combined"></i>
+            </button>
+            <!-- Quick Section Cut Toggle -->
+            <button id="btnToolClipping" title="Activar Corte Transversal de Sección" class="p-2 text-xs hover:bg-slate-700/60 rounded text-slate-300 hover:text-white transition flex items-center justify-center">
+                <i class="fa-solid fa-scissors"></i>
+            </button>
+        </div>
+
+        <!-- Center 3D Viewport Canvas -->
+        <div id="canvasContainer" class="flex-1 h-full w-full relative bg-gradient-to-b from-slate-900 via-slate-950 to-black cursor-grab active:cursor-grabbing">
+            <canvas id="threeCanvas" class="w-full h-full block"></canvas>
+
+            <!-- Navigation Helper Badge -->
+            <div class="absolute bottom-4 left-4 glass-panel px-3 py-1.5 rounded-md text-[11px] text-slate-400 border border-slate-800 flex items-center gap-3">
+                <span><i class="fa-solid fa-computer-mouse text-brand-400 mr-1"></i> Clic Izq. / Rueda: <b>Rotación CAD (Sin Ladeo)</b></span>
+                <span><i class="fa-solid fa-arrows-up-down-left-right text-amber-400 mr-1"></i> Shift + Clic / Der.: <b>Encuadre (Pan)</b></span>
+            </div>
+
+            <!-- Status Banner Indicator -->
+            <div id="infoBanner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-full text-xs text-amber-400 border border-amber-500/40 shadow-2xl flex items-center space-x-2">
+                <i class="fa-solid fa-circle-info animate-pulse"></i>
+                <span id="infoBannerText">Modo Medición: Haga clic en dos puntos de la pieza</span>
+            </div>
+
+            <!-- Measurement Details Floating Box -->
+            <div id="measureBox" class="hidden absolute bottom-16 left-4 glass-panel p-3 rounded-lg border border-brand-500/30 text-xs shadow-2xl min-w-[220px]">
+                <div class="flex justify-between items-center mb-1 pb-1 border-b border-slate-700">
+                    <span class="font-bold text-brand-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-ruler"></i> Medición CAD
+                    </span>
+                    <button id="btnClearMeasure" class="text-slate-400 hover:text-red-400"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="measureDetails" class="space-y-1 text-slate-300">
+                    <p class="text-slate-400">Seleccione el primer punto...</p>
+                </div>
+            </div>
+
+            <!-- Drag & Drop Overlay Zone -->
+            <div id="dropZone" class="hidden absolute inset-0 bg-brand-950/90 backdrop-blur-md border-4 border-dashed border-brand-500 flex flex-col items-center justify-center z-30 transition-all">
+                <i class="fa-solid fa-cloud-arrow-up text-6xl text-brand-400 mb-4 animate-bounce"></i>
+                <h2 class="text-2xl font-bold text-white">Suelte el archivo STL u OBJ aquí</h2>
+                <p class="text-slate-300 text-sm mt-2">Carga automática con auto-escalado e inspección</p>
+            </div>
+        </div>
+
+        <!-- Right Sidebar Controls -->
+        <aside class="w-80 bg-slate-900/95 border-l border-slate-800 flex flex-col z-10 shrink-0 overflow-y-auto">
+            <div class="p-3 space-y-3">
+
+                <!-- PANEL 1: Calculadora de Peso y Masa en Tiempo Real -->
+                <div class="bg-slate-800/50 rounded-lg border border-slate-800 overflow-hidden shadow-sm">
+                    <div class="px-3 py-2 bg-slate-800 text-xs font-semibold text-amber-400 flex items-center justify-between">
+                        <span><i class="fa-solid fa-weight-hanging text-amber-500 mr-2"></i> Calculadora de Peso Aeromodelismo</span>
+                    </div>
+                    <div class="p-3 space-y-2.5 text-xs">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Material y Densidad:</label>
+                            <select id="densitySelect" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500">
+                                <option value="0.16" data-color="#e3c18d" selected>Madera Balsa (0.16 g/cm³)</option>
+                                <option value="0.45" data-color="#c49a6c">Contrachapado Chopo / Plywood (0.45 g/cm³)</option>
+                                <option value="1.24" data-color="#06b6d4">PLA Impresión 3D (1.24 g/cm³)</option>
+                                <option value="0.60" data-color="#38bdf8">LW-PLA Ligero (0.60 g/cm³)</option>
+                                <option value="2.70" data-color="#94a3b8">Aluminio / Dural (2.70 g/cm³)</option>
+                                <option value="1.55" data-color="#475569">Fibra de Carbono (1.55 g/cm³)</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 pt-1 font-mono">
+                            <div class="bg-slate-900 p-2 rounded border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] font-sans">Volumen Calculado</span>
+                                <span id="statVolume" class="text-brand-400 font-bold text-sm">0 cm³</span>
+                            </div>
+                            <div class="bg-amber-500/10 p-2 rounded border border-amber-500/30">
+                                <span class="text-amber-300 block text-[10px] font-sans font-semibold">PESO ESTIMADO</span>
+                                <span id="statWeight" class="text-amber-400 font-bold text-base">0.0 g</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 2: Renderizado y Estilo -->
+                <div class="bg-slate-800/50 rounded-lg border border-slate-800 overflow-hidden">
+                    <div class="px-3 py-2 bg-slate-800 text-xs font-semibold text-slate-200 flex items-center justify-between">
+                        <span><i class="fa-solid fa-eye text-brand-500 mr-2"></i> Renderizado</span>
+                    </div>
+                    <div class="p-3 space-y-3 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="renderSolid" class="p-2 rounded bg-brand-600 text-white font-medium border border-brand-500 text-center transition">Sólido</button>
+                            <button id="renderWireframe" class="p-2 rounded bg-slate-700/50 hover:bg-slate-700 text-slate-300 font-medium border border-slate-600 text-center transition">Malla Wireframe</button>
+                            <button id="renderGhost" class="p-2 rounded bg-slate-700/50 hover:bg-slate-700 text-slate-300 font-medium border border-slate-600 text-center transition">Transparente</button>
+                            <button id="renderNormals" class="p-2 rounded bg-slate-700/50 hover:bg-slate-700 text-slate-300 font-medium border border-slate-600 text-center transition">Normales CAD</button>
+                        </div>
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="text-slate-400">Superponer Alambre:</label>
+                            <input type="checkbox" id="chkWireframeOverlay" class="accent-brand-500 rounded cursor-pointer h-4 w-4">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-slate-400">Suavizado de Aristas:</label>
+                            <input type="checkbox" id="chkSmoothShading" checked class="accent-brand-500 rounded cursor-pointer h-4 w-4">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 3: Material y Color Personalizado -->
+                <div class="bg-slate-800/50 rounded-lg border border-slate-800 overflow-hidden">
+                    <div class="px-3 py-2 bg-slate-800 text-xs font-semibold text-slate-200 flex items-center justify-between">
+                        <span><i class="fa-solid fa-palette text-amber-500 mr-2"></i> Acabado y Superficie</span>
+                    </div>
+                    <div class="p-3 space-y-3 text-xs">
+                        <div class="flex items-center justify-between">
+                            <label class="text-slate-400">Color Personalizado:</label>
+                            <input type="color" id="pickerColor" value="#e3c18d" class="bg-transparent border-0 w-8 h-8 cursor-pointer rounded">
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-slate-400 mb-1">
+                                <span>Opacidad:</span>
+                                <span id="valOpacity">100%</span>
+                            </div>
+                            <input type="range" id="sliderOpacity" min="0.1" max="1" step="0.05" value="1" class="w-full accent-brand-500 bg-slate-700 h-1.5 rounded">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 4: Entorno y Guías CAD -->
+                <div class="bg-slate-800/50 rounded-lg border border-slate-800 overflow-hidden">
+                    <div class="px-3 py-2 bg-slate-800 text-xs font-semibold text-slate-200 flex items-center justify-between">
+                        <span><i class="fa-solid fa-border-all text-brand-500 mr-2"></i> Guías CAD y Referencias</span>
+                    </div>
+                    <div class="p-3 space-y-2 text-xs">
+                        <div class="flex items-center justify-between">
+                            <label class="text-slate-400">Rejilla de Referencia (Grid):</label>
+                            <!-- Grid hidden by default -->
+                            <input type="checkbox" id="chkGrid" class="accent-brand-500 rounded cursor-pointer h-4 w-4">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-slate-400">Ejes Coordenados (XYZ):</label>
+                            <input type="checkbox" id="chkAxes" checked class="accent-brand-500 rounded cursor-pointer h-4 w-4">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-slate-400">Caja Envolvente (Bounding Box):</label>
+                            <input type="checkbox" id="chkBBox" class="accent-brand-500 rounded cursor-pointer h-4 w-4">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 5: Plano de Corte Transversal -->
+                <div class="bg-slate-800/50 rounded-lg border border-slate-800 overflow-hidden">
+                    <div class="px-3 py-2 bg-slate-800 text-xs font-semibold text-slate-200 flex items-center justify-between">
+                        <span><i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Corte de Sección (Plano)</span>
+                    </div>
+                    <div class="p-3 space-y-3 text-xs">
+                        <div class="flex items-center justify-between">
+                            <label class="text-slate-400 font-medium">Activar Plano de Corte:</label>
+                            <input type="checkbox" id="chkEnableClip" class="accent-brand-500 rounded cursor-pointer h-4 w-4">
+                        </div>
+                        
+                        <div id="clipControls" class="space-y-2 opacity-50 pointer-events-none transition-all">
+                            <div>
+                                <label class="text-slate-400 block mb-1">Eje de Corte:</label>
+                                <div class="grid grid-cols-3 gap-1">
+                                    <button id="clipAxisX" class="p-1 rounded bg-brand-600 text-white font-bold text-center">Eje X</button>
+                                    <button id="clipAxisY" class="p-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 text-center">Eje Y</button>
+                                    <button id="clipAxisZ" class="p-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 text-center">Eje Z</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-slate-400 mb-1">
+                                    <span>Posición del Corte:</span>
+                                    <span id="valClipPos">0 mm</span>
+                                </div>
+                                <input type="range" id="sliderClipPos" min="-100" max="100" step="1" value="0" class="w-full accent-brand-500 bg-slate-700 h-1.5 rounded">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 6: Dimensiones y Propiedades Técnicas -->
+                <div class="bg-slate-800/50 rounded-lg border border-slate-800 overflow-hidden">
+                    <div class="px-3 py-2 bg-slate-800 text-xs font-semibold text-slate-200 flex items-center justify-between">
+                        <span><i class="fa-solid fa-ruler-vertical text-brand-500 mr-2"></i> Dimensiones Exactas (mm)</span>
+                    </div>
+                    <div class="p-3 text-xs space-y-2 text-slate-300 font-mono">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400 font-sans">Vértices:</span>
+                            <span id="statVertices" class="text-white">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400 font-sans">Triángulos (Caras):</span>
+                            <span id="statTriangles" class="text-white">0</span>
+                        </div>
+                        <div class="h-px bg-slate-700 my-1"></div>
+                        <div class="text-slate-400 font-sans font-semibold mb-1">Cota Máxima Bounding Box (mm):</div>
+                        <div class="grid grid-cols-3 gap-1 text-center font-mono">
+                            <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+                                <span class="text-red-400 block text-[10px]">X (Ancho)</span>
+                                <span id="statDimX" class="text-white font-bold">0</span>
+                            </div>
+                            <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+                                <span class="text-green-400 block text-[10px]">Y (Alto)</span>
+                                <span id="statDimY" class="text-white font-bold">0</span>
+                            </div>
+                            <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+                                <span class="text-blue-400 block text-[10px]">Z (Largo)</span>
+                                <span id="statDimZ" class="text-white font-bold">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        /* Standalone Pure JS STL Parser (Binary & ASCII) */
+        function parseSTL(buffer) {
+            const isBinary = (function(buf) {
+                if (buf.byteLength < 84) return false;
+                const view = new DataView(buf);
+                const numTriangles = view.getUint32(80, true);
+                const expectedSize = 84 + numTriangles * 50;
+                return Math.abs(buf.byteLength - expectedSize) < 100;
+            })(buffer);
+
+            const geometry = new THREE.BufferGeometry();
+
+            if (isBinary) {
+                const view = new DataView(buffer);
+                const numTriangles = view.getUint32(80, true);
+                const positions = new Float32Array(numTriangles * 9);
+                const normals = new Float32Array(numTriangles * 9);
+
+                let offset = 84;
+                for (let i = 0; i < numTriangles; i++) {
+                    const nx = view.getFloat32(offset, true);
+                    const ny = view.getFloat32(offset + 4, true);
+                    const nz = view.getFloat32(offset + 8, true);
+                    offset += 12;
+
+                    for (let j = 0; j < 3; j++) {
+                        const vx = view.getFloat32(offset, true);
+                        const vy = view.getFloat32(offset + 4, true);
+                        const vz = view.getFloat32(offset + 8, true);
+                        offset += 12;
+
+                        const idx = (i * 3 + j) * 3;
+                        positions[idx] = vx;
+                        positions[idx + 1] = vy;
+                        positions[idx + 2] = vz;
+
+                        normals[idx] = nx;
+                        normals[idx + 1] = ny;
+                        normals[idx + 2] = nz;
+                    }
+                    offset += 2;
+                }
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+            } else {
+                const text = new TextDecoder().decode(buffer);
+                const lines = text.split('\n');
+                const posList = [];
+                const normList = [];
+                let currentNormal = [0, 0, 0];
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line.startsWith('facet normal')) {
+                        const parts = line.split(/\s+/);
+                        currentNormal = [parseFloat(parts[2]), parseFloat(parts[3]), parseFloat(parts[4])];
+                    } else if (line.startsWith('vertex')) {
+                        const parts = line.split(/\s+/);
+                        posList.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+                        normList.push(currentNormal[0], currentNormal[1], currentNormal[2]);
+                    }
+                }
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(posList, 3));
+                geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normList, 3));
+            }
+
+            return geometry;
+        }
+
+        /* Standalone Simple Wavefront OBJ Parser */
+        function parseOBJ(text) {
+            const lines = text.split('\n');
+            const vertices = [];
+            const finalPos = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.startsWith('v ')) {
+                    const parts = line.split(/\s+/);
+                    vertices.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+                } else if (line.startsWith('f ')) {
+                    const parts = line.split(/\s+/).slice(1);
+                    const faceVerts = parts.map(p => {
+                        const vIdx = parseInt(p.split('/')[0]) - 1;
+                        return vertices[vIdx];
+                    });
+                    for (let j = 1; j < faceVerts.length - 1; j++) {
+                        if (faceVerts[0] && faceVerts[j] && faceVerts[j+1]) {
+                            finalPos.push(...faceVerts[0], ...faceVerts[j], ...faceVerts[j+1]);
+                        }
+                    }
+                }
+            }
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(finalPos, 3));
+            geometry.computeVertexNormals();
+            return geometry;
+        }
+
+        /* Exact Mesh Volume Integration (Signed Tetrahedron Volume in cm³) */
+        function calculateMeshVolume(geometry) {
+            if (!geometry || !geometry.attributes.position) return 0;
+            const pos = geometry.attributes.position;
+            let totalVolume = 0;
+
+            const p1 = new THREE.Vector3();
+            const p2 = new THREE.Vector3();
+            const p3 = new THREE.Vector3();
+
+            if (geometry.index) {
+                const idx = geometry.index;
+                for (let i = 0; i < idx.count; i += 3) {
+                    p1.fromBufferAttribute(pos, idx.getX(i));
+                    p2.fromBufferAttribute(pos, idx.getX(i + 1));
+                    p3.fromBufferAttribute(pos, idx.getX(i + 2));
+                    totalVolume += p1.dot(p2.cross(p3)) / 6.0;
+                }
+            } else {
+                for (let i = 0; i < pos.count; i += 3) {
+                    p1.fromBufferAttribute(pos, i);
+                    p2.fromBufferAttribute(pos, i + 1);
+                    p3.fromBufferAttribute(pos, i + 2);
+                    totalVolume += p1.dot(p2.cross(p3)) / 6.0;
+                }
+            }
+
+            // Convert mm³ to cm³ (1 cm³ = 1000 mm³)
+            return Math.abs(totalVolume) / 1000.0;
+        }
+
+        // --- ENGINE STATE ---
+        let scene, camera, renderer, controls;
+        let currentMesh = null;
+        let wireframeMesh = null;
+        let bboxHelper = null;
+        let gridHelper, axesHelper;
+        let currentVolumeCm3 = 0;
+
+        let currentMaterial = new THREE.MeshStandardMaterial({
+            color: 0xe3c18d,
+            roughness: 0.6,
+            metalness: 0.05,
+            side: THREE.DoubleSide
+        });
+
+        let clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+        let clippingEnabled = false;
+
+        let isMeasuring = false;
+        let measurePoints = [];
+        let measureMarkers = [];
+        let measureLine = null;
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+
+        // --- UNDO / REDO HISTORY SYSTEM ---
+        let undoStack = [];
+        let redoStack = [];
+
+        function saveHistoryState() {
+            const state = {
+                color: '#' + currentMaterial.color.getHexString(),
+                opacity: currentMaterial.opacity,
+                wireframe: currentMaterial.wireframe,
+                roughness: currentMaterial.roughness,
+                metalness: currentMaterial.metalness,
+                densityValue: document.getElementById('densitySelect').value
+            };
+            undoStack.push(state);
+            if (undoStack.length > 25) undoStack.shift();
+            redoStack = [];
+            updateHistoryUI();
+        }
+
+        function restoreState(state) {
+            currentMaterial.color.set(state.color);
+            currentMaterial.opacity = state.opacity;
+            currentMaterial.transparent = state.opacity < 1.0;
+            currentMaterial.wireframe = state.wireframe;
+            currentMaterial.roughness = state.roughness;
+            currentMaterial.metalness = state.metalness;
+
+            document.getElementById('pickerColor').value = state.color;
+            document.getElementById('sliderOpacity').value = state.opacity;
+            document.getElementById('valOpacity').textContent = `${Math.round(state.opacity * 100)}%`;
+            document.getElementById('densitySelect').value = state.densityValue;
+
+            recalculateWeight();
+            updateHistoryUI();
+        }
+
+        function undo() {
+            if (undoStack.length === 0) return;
+            const currentState = {
+                color: '#' + currentMaterial.color.getHexString(),
+                opacity: currentMaterial.opacity,
+                wireframe: currentMaterial.wireframe,
+                roughness: currentMaterial.roughness,
+                metalness: currentMaterial.metalness,
+                densityValue: document.getElementById('densitySelect').value
+            };
+            redoStack.push(currentState);
+            const prevState = undoStack.pop();
+            restoreState(prevState);
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+            const currentState = {
+                color: '#' + currentMaterial.color.getHexString(),
+                opacity: currentMaterial.opacity,
+                wireframe: currentMaterial.wireframe,
+                roughness: currentMaterial.roughness,
+                metalness: currentMaterial.metalness,
+                densityValue: document.getElementById('densitySelect').value
+            };
+            undoStack.push(currentState);
+            const nextState = redoStack.pop();
+            restoreState(nextState);
+        }
+
+        function updateHistoryUI() {
+            document.getElementById('btnUndo').disabled = undoStack.length === 0;
+            document.getElementById('btnRedo').disabled = redoStack.length === 0;
+        }
+
+        function initEngine() {
+            const container = document.getElementById('canvasContainer');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 5000);
+            camera.position.set(200, 150, 250);
+            camera.up.set(0, 1, 0); // Fixed UpVector for clean, CAD-standard vertical rotation
+
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('threeCanvas'),
+                antialias: true,
+                preserveDrawingBuffer: true
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.localClippingEnabled = true;
+
+            // Configure OrbitControls for Clean, Natural CAD Navigation
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = true;
+
+            controls.mouseButtons = {
+                LEFT: THREE.MOUSE.ROTATE,
+                MIDDLE: THREE.MOUSE.ROTATE,
+                RIGHT: THREE.MOUSE.PAN
+            };
+
+            // Dynamic Pivot Point adjustment on Middle/Left Click over mesh
+            renderer.domElement.addEventListener('pointerdown', (e) => {
+                if (e.button === 1 || (e.button === 0 && !e.shiftKey)) {
+                    const rect = renderer.domElement.getBoundingClientRect();
+                    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    raycaster.setFromCamera(mouse, camera);
+
+                    if (currentMesh) {
+                        const intersects = raycaster.intersectObject(currentMesh);
+                        if (intersects.length > 0 && !isMeasuring) {
+                            controls.target.copy(intersects[0].point);
+                        }
+                    }
+                }
+            });
+
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.85);
+            dirLight1.position.set(200, 300, 200);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x90b0ff, 0.45);
+            dirLight2.position.set(-200, -200, -200);
+            scene.add(dirLight2);
+
+            // Helpers (Grid hidden by default as requested)
+            gridHelper = new THREE.GridHelper(400, 40, 0x0ea5e9, 0x334155);
+            gridHelper.position.y = -0.1;
+            gridHelper.visible = false;
+            scene.add(gridHelper);
+
+            axesHelper = new THREE.AxesHelper(60);
+            scene.add(axesHelper);
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('pointerdown', onCanvasClick);
+
+            // Keyboard Shortcuts for Undo/Redo
+            window.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                    if (e.shiftKey) redo(); else undo();
+                } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                    redo();
+                }
+            });
+
+            animate();
+            loadSample('rib');
+        }
+
+        function createRibGeometry() {
+            const shape = new THREE.Shape();
+            const chord = 220;
+            shape.moveTo(chord, 0);
+            for (let i = 15; i >= 0; i--) {
+                let x = (i / 15) * chord;
+                let xc = x / chord;
+                let yt = 5 * 0.12 * chord * (0.2969 * Math.sqrt(xc) - 0.1260 * xc - 0.3516 * Math.pow(xc, 2) + 0.2843 * Math.pow(xc, 3) - 0.1015 * Math.pow(xc, 4));
+                shape.lineTo(x, yt);
+            }
+            for (let i = 0; i <= 15; i++) {
+                let x = (i / 15) * chord;
+                let xc = x / chord;
+                let yt = 5 * 0.12 * chord * (0.2969 * Math.sqrt(xc) - 0.1260 * xc - 0.3516 * Math.pow(xc, 2) + 0.2843 * Math.pow(xc, 3) - 0.1015 * Math.pow(xc, 4));
+                shape.lineTo(x, -yt);
+            }
+
+            const h1 = new THREE.Path(); h1.absellipse(60, 0, 20, 10, 0, Math.PI * 2, true); shape.holes.push(h1);
+            const h2 = new THREE.Path(); h2.absellipse(120, 0, 25, 12, 0, Math.PI * 2, true); shape.holes.push(h2);
+            const h3 = new THREE.Path(); h3.absellipse(175, 0, 15, 6, 0, Math.PI * 2, true); shape.holes.push(h3);
+
+            const geom = new THREE.ExtrudeGeometry(shape, { depth: 3, bevelEnabled: true, bevelSize: 0.3, bevelThickness: 0.3 });
+            geom.center();
+            return geom;
+        }
+
+        function createWingGeometry() {
+            const shape = new THREE.Shape();
+            const chord = 180;
+            shape.moveTo(chord, 0);
+            for (let i = 15; i >= 0; i--) {
+                let x = (i / 15) * chord;
+                let xc = x / chord;
+                let yt = 5 * 0.14 * chord * (0.2969 * Math.sqrt(xc) - 0.1260 * xc - 0.3516 * Math.pow(xc, 2) + 0.2843 * Math.pow(xc, 3) - 0.1015 * Math.pow(xc, 4));
+                shape.lineTo(x, yt);
+            }
+            for (let i = 0; i <= 15; i++) {
+                let x = (i / 15) * chord;
+                let xc = x / chord;
+                let yt = 5 * 0.14 * chord * (0.2969 * Math.sqrt(xc) - 0.1260 * xc - 0.3516 * Math.pow(xc, 2) + 0.2843 * Math.pow(xc, 3) - 0.1015 * Math.pow(xc, 4));
+                shape.lineTo(x, -yt);
+            }
+            const geom = new THREE.ExtrudeGeometry(shape, { depth: 150, bevelEnabled: false });
+            geom.center();
+            return geom;
+        }
+
+        function createPropellerGeometry() {
+            const blade = new THREE.BoxGeometry(140, 4, 18, 12, 1, 2);
+            blade.rotateY(0.35);
+            blade.translate(70, 0, 0);
+            const geom = blade.clone();
+            geom.center();
+            return geom;
+        }
+
+        function createBulkheadGeometry() {
+            const shape = new THREE.Shape();
+            shape.absarc(0, 0, 75, 0, Math.PI * 2, false);
+            const center = new THREE.Path(); center.absarc(0, 0, 12, 0, Math.PI * 2, true); shape.holes.push(center);
+            for(let a=0; a<4; a++) {
+                const angle = (a * Math.PI / 2) + Math.PI/4;
+                const v = new THREE.Path();
+                v.absellipse(Math.cos(angle)*40, Math.sin(angle)*40, 15, 10, angle, 0, Math.PI*2, true);
+                shape.holes.push(v);
+            }
+            const geom = new THREE.ExtrudeGeometry(shape, { depth: 8, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5 });
+            geom.center();
+            return geom;
+        }
+
+        function updateDisplayMesh(geometry) {
+            if (!geometry) return;
+
+            if (currentMesh) { scene.remove(currentMesh); currentMesh.geometry.dispose(); }
+            if (wireframeMesh) { scene.remove(wireframeMesh); wireframeMesh.geometry.dispose(); }
+            if (bboxHelper) { scene.remove(bboxHelper); }
+
+            geometry.computeVertexNormals();
+            geometry.computeBoundingBox();
+            geometry.computeBoundingSphere();
+            geometry.center();
+
+            currentMesh = new THREE.Mesh(geometry, currentMaterial);
+            scene.add(currentMesh);
+
+            const wireGeo = new THREE.WireframeGeometry(geometry);
+            wireframeMesh = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.25, transparent: true }));
+            wireframeMesh.visible = document.getElementById('chkWireframeOverlay').checked;
+            scene.add(wireframeMesh);
+
+            bboxHelper = new THREE.BoxHelper(currentMesh, 0x0ea5e9);
+            bboxHelper.visible = document.getElementById('chkBBox').checked;
+            scene.add(bboxHelper);
+
+            const sphere = geometry.boundingSphere;
+            if (sphere && sphere.radius > 0) {
+                const radius = sphere.radius;
+                const dist = radius * 3.2;
+                camera.position.set(dist, dist * 0.8, dist);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.update();
+
+                const slider = document.getElementById('sliderClipPos');
+                slider.min = Math.floor(-radius * 1.5);
+                slider.max = Math.ceil(radius * 1.5);
+                slider.value = 0;
+                clipPlane.constant = 0;
+            }
+
+            // Calculate Volume and Weight
+            currentVolumeCm3 = calculateMeshVolume(geometry);
+            recalculateWeight();
+
+            updateStatsUI(geometry);
+            clearMeasurement();
+        }
+
+        function recalculateWeight() {
+            const density = parseFloat(document.getElementById('densitySelect').value);
+            const weightGrams = currentVolumeCm3 * density;
+
+            document.getElementById('statVolume').textContent = `${currentVolumeCm3.toFixed(2)} cm³`;
+            if (weightGrams >= 1000) {
+                document.getElementById('statWeight').textContent = `${(weightGrams / 1000).toFixed(2)} kg`;
+            } else {
+                document.getElementById('statWeight').textContent = `${weightGrams.toFixed(1)} g`;
+            }
+        }
+
+        function updateStatsUI(geometry) {
+            const pos = geometry.attributes.position;
+            const vertexCount = pos ? pos.count : 0;
+            const triangleCount = geometry.index ? geometry.index.count / 3 : vertexCount / 3;
+
+            document.getElementById('statVertices').textContent = vertexCount.toLocaleString();
+            document.getElementById('statTriangles').textContent = Math.round(triangleCount).toLocaleString();
+
+            const bbox = geometry.boundingBox;
+            const dimX = (bbox.max.x - bbox.min.x).toFixed(1);
+            const dimY = (bbox.max.y - bbox.min.y).toFixed(1);
+            const dimZ = (bbox.max.z - bbox.min.z).toFixed(1);
+
+            document.getElementById('statDimX').textContent = dimX;
+            document.getElementById('statDimY').textContent = dimY;
+            document.getElementById('statDimZ').textContent = dimZ;
+        }
+
+        function loadSample(key) {
+            let geom;
+            switch(key) {
+                case 'rib': geom = createRibGeometry(); break;
+                case 'wing': geom = createWingGeometry(); break;
+                case 'propeller': geom = createPropellerGeometry(); break;
+                case 'bulkhead': geom = createBulkheadGeometry(); break;
+            }
+            if (geom) updateDisplayMesh(geom);
+        }
+
+        function onCanvasClick(event) {
+            if (!isMeasuring || !currentMesh) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(currentMesh);
+
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                measurePoints.push(point);
+
+                const markerGeo = new THREE.SphereGeometry(2, 16, 16);
+                const markerMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+                const marker = new THREE.Mesh(markerGeo, markerMat);
+                marker.position.copy(point);
+                scene.add(marker);
+                measureMarkers.push(marker);
+
+                if (measurePoints.length === 1) {
+                    document.getElementById('measureDetails').innerHTML = `<p class='text-amber-400 font-medium'>Punto 1 fijado. Haga clic en el Punto 2...</p>`;
+                } else if (measurePoints.length === 2) {
+                    const lineGeo = new THREE.BufferGeometry().setFromPoints(measurePoints);
+                    const lineMat = new THREE.LineBasicMaterial({ color: 0xef4444, linewidth: 3 });
+                    measureLine = new THREE.Line(lineGeo, lineMat);
+                    scene.add(measureLine);
+
+                    const dist = measurePoints[0].distanceTo(measurePoints[1]);
+                    document.getElementById('measureDetails').innerHTML = `
+                        <div class="flex justify-between font-bold text-sm text-white">
+                            <span>Distancia:</span>
+                            <span class="text-amber-400">${dist.toFixed(2)} mm</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1 font-mono">
+                            P1: (${measurePoints[0].x.toFixed(1)}, ${measurePoints[0].y.toFixed(1)}, ${measurePoints[0].z.toFixed(1)})<br>
+                            P2: (${measurePoints[1].x.toFixed(1)}, ${measurePoints[1].y.toFixed(1)}, ${measurePoints[1].z.toFixed(1)})
+                        </div>
+                    `;
+                    toggleMeasuringMode(false);
+                }
+            }
+        }
+
+        function clearMeasurement() {
+            measurePoints = [];
+            measureMarkers.forEach(m => scene.remove(m));
+            measureMarkers = [];
+            if (measureLine) { scene.remove(measureLine); measureLine = null; }
+            document.getElementById('measureBox').classList.add('hidden');
+        }
+
+        function toggleMeasuringMode(enable) {
+            isMeasuring = enable !== undefined ? enable : !isMeasuring;
+            const banner = document.getElementById('infoBanner');
+            const btn = document.getElementById('btnToolMeasure');
+
+            if (isMeasuring) {
+                clearMeasurement();
+                banner.classList.remove('hidden');
+                btn.classList.add('bg-brand-600', 'text-white');
+                document.getElementById('measureBox').classList.remove('hidden');
+                document.getElementById('measureDetails').innerHTML = "<p class='text-slate-400'>Haga clic en el primer punto...</p>";
+            } else {
+                banner.classList.add('hidden');
+                btn.classList.remove('bg-brand-600', 'text-white');
+            }
+        }
+
+        function setupUI() {
+            // Undo & Redo Button Actions
+            document.getElementById('btnUndo').addEventListener('click', undo);
+            document.getElementById('btnRedo').addEventListener('click', redo);
+
+            // Density Material Select Handler
+            const densitySelect = document.getElementById('densitySelect');
+            densitySelect.addEventListener('change', (e) => {
+                saveHistoryState();
+                const selectedOpt = e.target.options[e.target.selectedIndex];
+                const colorHex = selectedOpt.getAttribute('data-color');
+                if (colorHex) {
+                    currentMaterial.color.set(colorHex);
+                    document.getElementById('pickerColor').value = colorHex;
+                }
+                recalculateWeight();
+            });
+
+            // File Upload & Drag-and-Drop
+            const fileInput = document.getElementById('fileInput');
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) processFile(file);
+            });
+
+            const dropZone = document.getElementById('dropZone');
+            window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.remove('hidden'); });
+            dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.add('hidden'); });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('hidden');
+                if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
+            });
+
+            function processFile(file) {
+                const reader = new FileReader();
+                const name = file.name.toLowerCase();
+
+                if (name.endsWith('.stl')) {
+                    reader.readAsArrayBuffer(file);
+                    reader.onload = (evt) => {
+                        try {
+                            const geom = parseSTL(evt.target.result);
+                            updateDisplayMesh(geom);
+                        } catch(err) {
+                            alert("Error leyendo archivo STL: " + err.message);
+                        }
+                    };
+                } else if (name.endsWith('.obj')) {
+                    reader.readAsText(file);
+                    reader.onload = (evt) => {
+                        try {
+                            const geom = parseOBJ(evt.target.result);
+                            updateDisplayMesh(geom);
+                        } catch(err) {
+                            alert("Error leyendo archivo OBJ: " + err.message);
+                        }
+                    };
+                }
+            }
+
+            document.getElementById('sampleSelect').addEventListener('change', (e) => loadSample(e.target.value));
+
+            document.getElementById('btnResetCamera').addEventListener('click', () => { if(currentMesh) updateDisplayMesh(currentMesh.geometry); });
+            document.getElementById('viewIso').addEventListener('click', () => { if(currentMesh) updateDisplayMesh(currentMesh.geometry); });
+            document.getElementById('viewTop').addEventListener('click', () => setCameraView(0, 300, 0));
+            document.getElementById('viewFront').addEventListener('click', () => setCameraView(0, 0, 300));
+            document.getElementById('viewRight').addEventListener('click', () => setCameraView(300, 0, 0));
+
+            // Render Mode Buttons with History Tracking
+            document.getElementById('renderSolid').addEventListener('click', () => {
+                saveHistoryState();
+                currentMaterial.wireframe = false;
+                currentMaterial.opacity = 1.0;
+                currentMaterial.transparent = false;
+            });
+            document.getElementById('renderWireframe').addEventListener('click', () => {
+                saveHistoryState();
+                currentMaterial.wireframe = true;
+            });
+            document.getElementById('renderGhost').addEventListener('click', () => {
+                saveHistoryState();
+                currentMaterial.wireframe = false;
+                currentMaterial.opacity = 0.4;
+                currentMaterial.transparent = true;
+            });
+            document.getElementById('renderNormals').addEventListener('click', () => {
+                if(currentMesh) currentMesh.material = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+            });
+
+            document.getElementById('chkWireframeOverlay').addEventListener('change', (e) => { if(wireframeMesh) wireframeMesh.visible = e.target.checked; });
+            document.getElementById('chkSmoothShading').addEventListener('change', (e) => {
+                if(currentMesh) { currentMaterial.flatShading = !e.target.checked; currentMaterial.needsUpdate = true; }
+            });
+
+            document.getElementById('pickerColor').addEventListener('input', (e) => currentMaterial.color.set(e.target.value));
+            document.getElementById('pickerColor').addEventListener('change', () => saveHistoryState());
+
+            document.getElementById('sliderOpacity').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                currentMaterial.opacity = val;
+                currentMaterial.transparent = val < 1.0;
+                document.getElementById('valOpacity').textContent = `${Math.round(val * 100)}%`;
+            });
+            document.getElementById('sliderOpacity').addEventListener('change', () => saveHistoryState());
+
+            document.getElementById('chkGrid').addEventListener('change', (e) => gridHelper.visible = e.target.checked);
+            document.getElementById('chkAxes').addEventListener('change', (e) => axesHelper.visible = e.target.checked);
+            document.getElementById('chkBBox').addEventListener('change', (e) => { if(bboxHelper) bboxHelper.visible = e.target.checked; });
+
+            document.getElementById('btnToolMeasure').addEventListener('click', () => toggleMeasuringMode());
+            document.getElementById('btnClearMeasure').addEventListener('click', clearMeasurement);
+
+            const chkClip = document.getElementById('chkEnableClip');
+            const clipControls = document.getElementById('clipControls');
+            chkClip.addEventListener('change', (e) => {
+                clippingEnabled = e.target.checked;
+                currentMaterial.clippingPlanes = clippingEnabled ? [clipPlane] : [];
+                currentMaterial.needsUpdate = true;
+                if (clippingEnabled) clipControls.classList.remove('opacity-50', 'pointer-events-none');
+                else clipControls.classList.add('opacity-50', 'pointer-events-none');
+            });
+
+            document.getElementById('btnToolClipping').addEventListener('click', () => {
+                chkClip.checked = !chkClip.checked;
+                chkClip.dispatchEvent(new Event('change'));
+            });
+
+            document.getElementById('clipAxisX').addEventListener('click', () => clipPlane.normal.set(1, 0, 0));
+            document.getElementById('clipAxisY').addEventListener('click', () => clipPlane.normal.set(0, 1, 0));
+            document.getElementById('clipAxisZ').addEventListener('click', () => clipPlane.normal.set(0, 0, 1));
+
+            document.getElementById('sliderClipPos').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                clipPlane.constant = val;
+                document.getElementById('valClipPos').textContent = `${val} mm`;
+            });
+        }
+
+        function setCameraView(x, y, z) {
+            camera.position.set(x, y, z);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvasContainer');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            initEngine();
+            setupUI();
+        };
+    </script>
+</body>
+</html>
